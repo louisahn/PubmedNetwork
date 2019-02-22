@@ -82,9 +82,6 @@ networkD3::forceNetwork(Links = edges, Nodes = nodes
 
 
 
-
-
-
 #Not using now. save for later
 forceNetwork(Links = MisLinks, Nodes = MisNodes,
              Source = "source", Target = "target",
