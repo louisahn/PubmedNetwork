@@ -1,6 +1,10 @@
 
-install.packages("visNetwork")
+#install.packages("visNetwork")
 library(visNetwork)
+library(RSQLite)
+library(dplyr)
+library(jsonlite)
+library(reutils)
 
 
 setwd("D:/RWork/PubmedNetwork")
@@ -71,12 +75,12 @@ edges = edges_df %>%
 
 visNetwork(nodes, edges, height = "500px", width = "100%") %>%
   visLegend()  %>%
-  visGroups(groupname = "Authors", color = "darkblue") %>%
+  visGroups(groupname = "Authors", color = "lightblue") %>%
   visGroups(groupname = "Industry" , color = "red") %>%
   #visOptions(highlightNearest = list(enabled =TRUE, degree = 2, hover = T)) %>%
   addFontAwesome() %>%
   visPhysics(stabilization = FALSE) %>%
-  visIgraphLayout(layout = "layout_with_lgl") %>%
+  visIgraphLayout(layout = "layout_with_kk") %>%
   # layout_nicely,ifelse(input$layout == "2", layout_with_fr, ifelse(input$layout == "3", layout_with_kk, ifelse(input$layout == "4", layout_in_circle, layout_with_lgl)))), 
   visEdges(smooth = FALSE) %>%
   visNodes(color = list(background = "lightblue"

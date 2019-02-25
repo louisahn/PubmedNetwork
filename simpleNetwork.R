@@ -29,6 +29,27 @@ networkData <- data.frame(src, target)
 simpleNetwork(networkData)
 
 
+dbListTables(exampledb) 
+pmiddf = data.frame(pmidlist, c='pmid')
+dbWriteTable(exampledb, "pmidtable", pmidlist) 
+
+edges_master = dbGetQuery(exampledb, 'select pmid, cid as "from", aid as "to" from edges_master where pmid in :a'
+                          , list(a = pmidlist)   )
+
+paste(pmidlist,collapse = ",")
+
+a = dbGetQuery(exampledb,'select pmid, cid as "from", aid as "to" from edges_master where pmid IN (',
+        paste(pmidlist,collapse = ','  ), ')'  )
+
+
+dbExecute(exampledb, "CREATE INDEX tag_pmid ON edges_master (pmid)")
+
+a = paste(pmidlist,collapse = "','") 
+b = paste("'", a , "'" )
+query = paste('select pmid, cid as "from", aid as "to" from edges_master where pmid IN (',b,')')
+a = dbGetQuery(exampledb,query)
+
+
 
 
 #Not using now. save for later
