@@ -1,8 +1,3 @@
-
-###########################################
-#   Article Level
-###########################################
-
 #install.packages("visNetwork")
 library(visNetwork)
 library(RSQLite)
@@ -31,6 +26,7 @@ pmidlist <- append(pmidlist,tempdata$esearchresult$idlist)
 #dbExecute(exampledb, "CREATE INDEX tag_cid ON edges_master (cid)")
 #dbExecute(exampledb, "CREATE INDEX tag_aid ON edges_master (aid)")
 #dbListFields(connection, "edges_master")
+dbListFields(connection, "article_meta_data")
 #dbGetQuery(connection,"select * from edges_master where pmid >0 and cid>0 and aid>0 LIMIT 50")
 #dbGetQuery(connection,"select * from edges_master where industry_type <> 'pharmaceuticals'")
 
@@ -44,15 +40,33 @@ query = paste('select pmid as "target"
                 from edges_master where pmid IN (',query_pmid_list_where,')'
               , '   group by co_name, pmid'
               )
+
+query2 = paste('select pmid, title 
+                from article_meta_data where pmid IN (',query_pmid_list_where,')')
+
 # Execute Query
 edges_df = dbGetQuery(connection,query)
+article_meta_data = dbGetQuery(connection,query2)
 #aa= edges_df[edges_df$industry_type != 'pharmaceuticals', ]
-summary(edges_df)
+#summary(edges_df)
 #edges_df$to
 #head(edges_df)
 
+#Build from nodes
 nodes_from <- as.data.frame(table(title =edges_df$source ))
-nodes_to <- as.data.frame(table(title =edges_df$target))
+nodes_from = nodes_from %>% 
+  mutate(value = Freq)  %>%
+  mutate(pmid = 0)
+
+#Build to nodes
+nodes_to <- as.data.frame(table(pmid =edges_df$target))
+nodes_to = nodes_to %>% 
+  mutate(value = 1)  
+
+#create title 
+nodes_to = nodes_to %>% 
+  left_join(article_meta_data %>% rename(title = title), by=c('pmid' = 'pmid')) 
+
 #nodes_from <- as.data.frame(table(name=edges$from, nName=edges$co_name, Group=edges$coi_type ))
 #nodes_to <- as.data.frame(table(name=edges$to, nName=edges$author_name))
 #nodes_to["Group"]="Authors"
@@ -73,12 +87,16 @@ nodes = nodes_df %>%
 
 #create from, to in edges
 edges = edges_df %>% 
-  left_join(nodes %>% rename(from = id), by=c('source' = 'title')) %>% 
-  left_join(nodes %>% rename(to = id), by=c('target' = 'title'))
+  #left_join(nodes[,c("title")] %>% rename(from = title), by=c('source' = 'title'))  %>% 
+  left_join(nodes[,c("pmid", "title")] %>% rename(to = title), by=c('target' = 'pmid'))
 
-visNetwork(nodes, edges, height = "800px", width = "100%") %>%
+edges = edges %>% 
+  mutate(from = source) 
+
+
+visNetwork(nodes, edges, height = "500px", width = "100%") %>%
   visLegend()  %>%
-  visGroups(groupname = "Authors", color = "lightblue") %>%
+  visGroups(groupname = "Article", color = "lightblue") %>%
   visGroups(groupname = "Industry" , color = "red") %>%
   #visOptions(highlightNearest = list(enabled =TRUE, degree = 2, hover = T)) %>%
   addFontAwesome() %>%
@@ -93,5 +111,4 @@ visNetwork(nodes, edges, height = "800px", width = "100%") %>%
   ) %>%
   #  visInteraction(hover = TRUE)  %>%
   visLayout(randomSeed = 123)   %>%
-  visEdges ( arrows = 'to' )
-
+  visEdges ( arrows = 'from' )

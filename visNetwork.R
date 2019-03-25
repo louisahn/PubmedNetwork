@@ -1,4 +1,9 @@
 
+###########################################
+#   Author Level
+###########################################
+
+
 #install.packages("visNetwork")
 library(visNetwork)
 library(RSQLite)
@@ -28,7 +33,7 @@ pmidlist <- append(pmidlist,tempdata$esearchresult$idlist)
 #dbExecute(exampledb, "CREATE INDEX tag_aid ON edges_master (aid)")
 #dbListFields(connection, "edges_master")
 #dbGetQuery(connection,"select * from edges_master where pmid >0 and cid>0 and aid>0 LIMIT 50")
-#dbGetQuery(connection,"select * from edges_master where industry_type <> 'pharmaceuticals'")
+aa = dbGetQuery(connection,"select * from edges_master LIMIT 50")
 
 # Build query with pmid list 
 query_pmid_list = paste(pmidlist,collapse = "','") 
