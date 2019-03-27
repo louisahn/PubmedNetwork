@@ -34,7 +34,7 @@ ui <- fluidPage( theme = shinytheme("sandstone"),
        ),
        mainPanel(
          div(id="plot", style="margin-bottom:100px;"
-              , visNetworkOutput("network")
+              , visNetworkOutput("network_proxy")
              #, verbatimTextOutput("outval")
 
              )
@@ -105,7 +105,9 @@ server <- function(input, output, session) {
 
   #output$outval <- renderText({ query() })  
 
-  output$network <- renderVisNetwork({
+  
+  
+  output$network_proxy  <- renderVisNetwork({
     
     #cat(file=stderr(), query(), "\n")
     message(query())
@@ -140,8 +142,6 @@ server <- function(input, output, session) {
       left_join(nodes %>% rename(from = id), by=c('source' = 'title')) %>% 
       left_join(nodes %>% rename(to = id), by=c('target' = 'title'))
     
-    output$network <- renderVisNetwork(
-      {
         visNetwork(nodes, edges, height = "600px", width = "100%") %>%
           visLegend()  %>%
           visGroups(groupname = "Authors", color = "lightblue") %>%
@@ -159,7 +159,6 @@ server <- function(input, output, session) {
           #  visInteraction(hover = TRUE)  %>%
           visLayout(randomSeed = 123)   %>%
           visEdges ( arrows = 'to' )
-      })
   })  
   
 }
