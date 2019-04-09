@@ -25,31 +25,31 @@ ui <- fluidPage( theme = shinytheme("sandstone"),
                    div(style="display: inline-block;vertical-align:top; width: 220px; margin-left: 10px;", 
                        selectInput("layout", label = "Select Layout:", choices = list("Smart Layout"=1, "Fruchterman-Reingold"=2, "Kamada-Kawai"=3,"Ciricle"=4, "Large Graph Layout"=5))
                        ,div(style="margin-top: -10px;",HTML("<a href='http://conflictmetrics.com/layouts' target='_blank'>&nbsp;Learn more about layout types</a>"))
-                       
+                        
                    ),
                    div(style="clear:both; margin-left: 250px; margin-top: -10px;",HTML("<em>Type to search (ex: leukemia) </em><br />")),
-                   
-                   
-                   hr()
+
+                 
+                  hr()
                  ),
                  
                  fluidRow(
-                   div(style="display: inline-block;vertical-align:top;margin-left: 10px;"
-                       , textOutput("text_citation")
-                   ),
-                   div(id="plot", style="height:400px;"
-                       , visNetworkOutput("network")
-                       #, verbatimTextOutput("outval")
-                       
-                       #, tags$style(type="text/css",
-                       #             ".shiny-output-error { visibility: hidden; }",
-                       #              ".shiny-output-error:before { visibility: visible; content: 'Loading...'; }")                        
-                   )
-                 ),
+                    div(style="display: inline-block;vertical-align:top;margin-left: 10px;"
+                        , textOutput("text_citation")
+                      ),
+                     div(id="plot", style="height:400px;"
+                         , visNetworkOutput("network")
+                         #, verbatimTextOutput("outval")
+                         
+                         #, tags$style(type="text/css",
+                         #             ".shiny-output-error { visibility: hidden; }",
+                         #              ".shiny-output-error:before { visibility: visible; content: 'Loading...'; }")                        
+                     )
+                    ),
                  fluidRow(
-                   dataTableOutput("topsponsors")
-                 )
-)
+                          dataTableOutput("topsponsors")
+                          )
+              )
 
 server <- function(input, output, session) {
   
@@ -57,7 +57,7 @@ server <- function(input, output, session) {
   # connect to the sqlite file
   sqlite    <- dbDriver("SQLite")
   connection <- dbConnect(sqlite,"t2v_test.sqlite")
-  
+
   output$idquery <- renderUI({
     textInput("pname", label="Name Search:", value = "")
   })
@@ -65,13 +65,13 @@ server <- function(input, output, session) {
   observeEvent(input$go, {
     message("go button was pressed")
     updateTextInput(session, 'pname', label="Name Search:", value = input$pname)
-    
+  
   })
   
   pidInput <- eventReactive(input$go, {
     temp <- esearch(input$pname,db="pubmed",retmode = "json", retstart = 0, retmax = "100000", datetype = "pdat",mindate = "2015",maxdate = "2018")
   })
-  
+
   counter = 0
   query <- reactive( {
     #Get pmid from  API
@@ -99,7 +99,7 @@ server <- function(input, output, session) {
     query_pmid_list_where <- paste0("'",query_pmid_list,"'" )
     #cat(file=stderr(), query_pmid_list, "\n")
     query = paste('select edges_master.pmid as "target" 
-                  , co_name  as "source"
+              , co_name  as "source"
                   , sum(weight) as value  
                   , max(article_meta_data.title) as article_title
                   from edges_master 
@@ -113,7 +113,7 @@ server <- function(input, output, session) {
   
   #output$outval <- renderText({ query() })  
   
-  output$network <- renderVisNetwork({
+    output$network <- renderVisNetwork({
     
     #cat(file=stderr(), query(), "\n")
     # Execute Query
@@ -151,12 +151,12 @@ server <- function(input, output, session) {
     nodes <- nodes_df %>% 
       mutate(id = row_number()) 
     #edges_df[grepl( "Merck", edges_df$source),]
-    
+        
     #create from, to in edges
     edges <- edges_df %>% 
       left_join(select(nodes, id, title) %>% rename(from = id), by=c('source' = 'title')) %>% 
       left_join(select(nodes, id, title) %>% rename(to = id), by=c('target' = 'title'))
-    
+
     output$network <- renderVisNetwork(
       {
         visNetwork(nodes, edges, height = "400px", width = "100%") %>%
@@ -189,10 +189,10 @@ server <- function(input, output, session) {
     })
     
     #Text display with citations len(pmidlist)  vs len(unique(edges:df$pmid)) , input$var2
-    output$text_citation <- renderText({ 
-      paste("  PubMed Citations Matching Search for ", input$pname, ": ", length(edges_df$target), " Citations with COI Data: ",   length(nodes_from$title) )
-    })
-    
+      output$text_citation <- renderText({ 
+        paste("  PubMed Citations Matching Search for ", input$pname, ": ", length(edges_df$target), " Citations with COI Data: ",   length(nodes_from$title) )
+      })
+
   })  
   
 }

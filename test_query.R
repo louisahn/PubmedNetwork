@@ -16,6 +16,8 @@ setwd("D:/RWork/PubmedNetwork")
 # connect to the sqlite file
 sqlite    <- dbDriver("SQLite")
 connection <- dbConnect(sqlite,"t2v_test.sqlite")
+dbListTables(connection)
+
 
 #Get pmid from  API
 pmidlist = list()
@@ -33,11 +35,16 @@ pmidlist <- append(pmidlist,tempdata$esearchresult$idlist)
 #dbExecute(exampledb, "CREATE INDEX tag_aid ON edges_master (aid)")
 #dbListFields(connection, "edges_master")
 #dbGetQuery(connection,"select * from edges_master where pmid >0 and cid>0 and aid>0 LIMIT 50")
+query = "select * from edges_master where pmid >0 and cid>0 and aid>0 LIMIT 50"
 aa = dbGetQuery(connection,"select * from edges_master LIMIT 50")
+aa = dbGetQuery(connection,"select * from article_meta_data LIMIT 50")
+dbGetQuery(connection,"select pmid, author_name, co_name, sum(weight) from edges_master where pmid=27416912 group by pmid, author_name, co_name")
+
 
 # Build query with pmid list 
+query_pmid_list
 query_pmid_list = paste(pmidlist,collapse = "','") 
-query_pmid_list_where = paste("'", query_pmid_list , "'" )
+query_pmid_list_where = paste0("'",query_pmid_list, "'" )
 query = paste('select pmid, cid, aid
               , author_name  as "target" 
               , co_name  as "source"
@@ -47,11 +54,22 @@ query = paste('select pmid, cid, aid
               from edges_master where pmid IN (',query_pmid_list_where,')')
 query <- paste('select pmid as "target" 
                   , co_name  as "source"
-               , sum(weight) as value  
+               , count(*) as value  
                , max(industry_type), coi_type
                from edges_master where pmid IN (',query_pmid_list_where,')'
                , '   group by co_name, pmid'
 )
+query <- paste('select edges_master.pmid as "target" 
+                   , co_name  as "source"
+                  , article_meta_data.title 
+                   from edges_master 
+                    join article_meta_data
+                      on edges_master.pmid = article_meta_data.pmid
+                   where edges_master.pmid IN (',query_pmid_list_where,')'
+            )
+
+
+
 query
 # Execute Query
 edges_df = dbGetQuery(connection,query)
@@ -72,13 +90,15 @@ nodes_from = nodes_from %>%
   mutate(group = "Industry") 
 
 nodes_df <- rbind(nodes_from , nodes_to )
+head(nodes_df)
 #drop rows that freq is 0
 nodes_df = nodes_df[nodes_df$Freq != 0,]
 
 #idx create
 nodes = nodes_df %>% 
-  mutate(id = row_number()) %>% 
-  mutate(value = Freq)  
+  mutate(id = row_number()) 
+
+nodes_df$Freq = nodes_df$Freq*1000
 
 #create from, to in edges
 edges = edges_df %>% 

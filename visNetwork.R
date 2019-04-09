@@ -78,14 +78,14 @@ edges = edges_df %>%
   left_join(nodes %>% rename(from = id), by=c('source' = 'title')) %>% 
   left_join(nodes %>% rename(to = id), by=c('target' = 'title'))
 
-visNetwork(nodes, edges, height = "500px", width = "100%") %>%
+visNetwork(nodes, edges, height = "900px", width = "100%") %>%
   visLegend()  %>%
   visGroups(groupname = "Authors", color = "lightblue") %>%
   visGroups(groupname = "Industry" , color = "red") %>%
   #visOptions(highlightNearest = list(enabled =TRUE, degree = 2, hover = T)) %>%
   addFontAwesome() %>%
   visPhysics(stabilization = FALSE) %>%
-  visIgraphLayout(layout = "layout_with_kk") %>%
+  visIgraphLayout(layout = "layout_nicely") %>%
   # layout_nicely,ifelse(input$layout == "2", layout_with_fr, ifelse(input$layout == "3", layout_with_kk, ifelse(input$layout == "4", layout_in_circle, layout_with_lgl)))), 
   visEdges(smooth = FALSE) %>%
   visNodes(color = list(background = "lightblue"
