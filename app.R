@@ -32,7 +32,7 @@ ui <- fluidPage( theme = shinytheme("sandstone"),
                        , htmlOutput("text_citation")
                    )
                    , tags$head(tags$style(type="text/css", "
-                                          #loadmessage {
+                                        #loadmessage {
                                           position: fixed;
                                           top: 0px;
                                           left: 0px;
@@ -47,8 +47,8 @@ ui <- fluidPage( theme = shinytheme("sandstone"),
                                           }
                                           "))                        
                    ,conditionalPanel(condition="$('html').hasClass('shiny-busy')",
-                                     tags$div("Loading...",id="loadmessage"))
-                   ),
+                                    tags$div("Loading...",id="loadmessage"))
+                 ),
                  sidebarLayout(
                    sidebarPanel(width = 3,
                                 selectInput("layout", label = "Select Layout:", choices = list("Smart Layout"=1, "Fruchterman-Reingold"=2, "Kamada-Kawai"=3,"Ciricle"=4, "Large Graph Layout"=5))
@@ -65,7 +65,7 @@ ui <- fluidPage( theme = shinytheme("sandstone"),
                  fluidRow(
                    dataTableOutput("topsponsors")
                  )
-                 )
+)
 
 server <- function(input, output, session) {
   
@@ -92,7 +92,6 @@ server <- function(input, output, session) {
   vals <- reactiveValues(pmidcount = 0) #set vals$pmidcount
   vals <- reactiveValues(nfv = 0)  #set vals$nfv
   vals <- reactiveValues(dbcount = 0)  #set vals$dbcount
-  
   query <- reactive( {
     #Get pmid from  API
     pmidlist <- list()
@@ -120,7 +119,7 @@ server <- function(input, output, session) {
     #cat(file=stderr(), query_pmid_list, "\n")
     if(input$granularitylvl == "1" ){
       query = paste('select aid 
-                    , author_name  as "target" 
+              , author_name  as "target" 
                     , co_name  as "source"
                     , sum(weight) as value
                     , industry_type
@@ -129,17 +128,17 @@ server <- function(input, output, session) {
     }
     else{
       query = paste('select edges_master.pmid as "target" 
-                    , co_name  as "source"
-                    , sum(weight) as value  
-                    , max(article_meta_data.title) as article_title
-                    from edges_master 
-                    join article_meta_data
-                    on edges_master.pmid = article_meta_data.pmid
-                    where edges_master.pmid IN (',query_pmid_list_where,')'
+                  , co_name  as "source"
+                  , sum(weight) as value  
+                  , max(article_meta_data.title) as article_title
+                  from edges_master 
+                  join article_meta_data
+                  on edges_master.pmid = article_meta_data.pmid
+                  where edges_master.pmid IN (',query_pmid_list_where,')'
                     , 'group by edges_master.pmid, co_name'    )
-      
-    }
     
+    }
+
     
   })  
   output$nodeslide <- renderUI({
@@ -155,11 +154,11 @@ server <- function(input, output, session) {
     #edges_df$to
     #edges_df[grepl( "Novartis", edges_df$source),]
     #edges_df[edges_df$source == "Novartis",]
-    
+
     nodes_from <- as.data.frame(table(title =edges_df$source ))
     nodes_to <- as.data.frame(table(title =edges_df$target))
     
-    
+
     #Check data - this's not working
     #validate(
     #    need( nrow (nodes_from)>0, "No data has returned")
@@ -177,28 +176,27 @@ server <- function(input, output, session) {
       })
       
     }
-    
-    
+
+
     vals$dbcount = max(nodes_from$Freq)
     message(paste("dbcount: ", vals$dbcount) )
-    
+
     #nodes_from <- as.data.frame(table(name=edges$from, nName=edges$co_name, Group=edges$coi_type ))
     #nodes_to <- as.data.frame(table(name=edges$to, nName=edges$author_name))
     #nodes_to["Group"]="Authors"
     nodes_to$Freq = 1 # fix author&article's node size
     
     groupName=""
-    if(input$granularitylvl == "1" ){groupName="Authors"}
-    else{groupName="Article"}
+    if(input$granularitylvl == "1" ){groupName="Authors"
+    }else{groupName="Article"}
     
     nodes_to <- nodes_to %>% 
       mutate(group = groupName) %>% 
-      mutate(value = Freq)   %>% 
-      mutate(label = title)   
-    
+      mutate(value = Freq)   
+
     #nfv match count in db
     vals$nfv <- sum(nodes_to$Freq)
-    
+
     nodes_from <- nodes_from %>% 
       mutate(group = "Industry")  %>% 
       mutate(value = Freq)    %>% 
