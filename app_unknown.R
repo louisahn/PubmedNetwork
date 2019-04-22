@@ -1,5 +1,3 @@
-#Lvl 2 final.
-
 require(shiny)
 library(shinythemes)
 
@@ -31,24 +29,7 @@ ui <- fluidPage( theme = shinytheme("sandstone"),
                    div(style="display: inline-block;vertical-align:top;margin-left: 10px;margin-bottom:10px;"
                        , htmlOutput("text_citation")
                    )
-                   , tags$head(tags$style(type="text/css", "
-                                          #loadmessage {
-                                          position: fixed;
-                                          top: 0px;
-                                          left: 0px;
-                                          width: 100%;
-                                          padding: 5px 0px 5px 0px;
-                                          text-align: center;
-                                          font-weight: bold;
-                                          font-size: 100%;
-                                          color: #000000;
-                                          background-color: #CCFF66;
-                                          z-index: 105;
-                                          }
-                                          "))                        
-                   ,conditionalPanel(condition="$('html').hasClass('shiny-busy')",
-                                     tags$div("Loading...",id="loadmessage"))
-                   ),
+                 ),
                  sidebarLayout(
                    sidebarPanel(width = 3,
                                 selectInput("layout", label = "Select Layout:", choices = list("Smart Layout"=1, "Fruchterman-Reingold"=2, "Kamada-Kawai"=3,"Ciricle"=4, "Large Graph Layout"=5))
@@ -59,13 +40,17 @@ ui <- fluidPage( theme = shinytheme("sandstone"),
                      div(id="plot", style="height:400px;"
                          , visNetworkOutput("network_proxy")
                          #, verbatimTextOutput("outval")
+                         
+                         #, tags$style(type="text/css",
+                         #             ".shiny-output-error { visibility: hidden; }",
+                         #              ".shiny-output-error:before { visibility: visible; content: 'Loading...'; }")                        
                      )                     
                    )
                  ),
                  fluidRow(
                    dataTableOutput("topsponsors")
                  )
-                 )
+)
 
 server <- function(input, output, session) {
   
@@ -92,7 +77,7 @@ server <- function(input, output, session) {
   vals <- reactiveValues(pmidcount = 0) #set vals$pmidcount
   vals <- reactiveValues(nfv = 0)  #set vals$nfv
   vals <- reactiveValues(dbcount = 0)  #set vals$dbcount
-  
+
   query <- reactive( {
     #Get pmid from  API
     pmidlist <- list()
@@ -118,35 +103,27 @@ server <- function(input, output, session) {
     query_pmid_list <- paste(pmidlist,collapse = "','") 
     query_pmid_list_where <- paste0("'",query_pmid_list,"'" )
     #cat(file=stderr(), query_pmid_list, "\n")
-    if(input$granularitylvl == "1" ){
-      query = paste('select aid 
-                    , author_name  as "target" 
-                    , co_name  as "source"
-                    , sum(weight) as value
-                    , industry_type
-                    from edges_master where pmid IN (',query_pmid_list_where,')'
-                    , 'group by edges_master.aid, co_name'    )
-    }
-    else{
-      query = paste('select edges_master.pmid as "target" 
-                    , co_name  as "source"
-                    , sum(weight) as value  
-                    , max(article_meta_data.title) as article_title
-                    from edges_master 
-                    join article_meta_data
-                    on edges_master.pmid = article_meta_data.pmid
-                    where edges_master.pmid IN (',query_pmid_list_where,')'
-                    , 'group by edges_master.pmid, co_name'    )
-      
-    }
-    
+    query = paste('select edges_master.pmid as "target" 
+                  , co_name  as "source"
+                  , sum(weight) as value  
+                  , max(article_meta_data.title) as article_title
+                  from edges_master 
+                  join article_meta_data
+                  on edges_master.pmid = article_meta_data.pmid
+                  where edges_master.pmid IN (',query_pmid_list_where,')'
+                  , 'group by edges_master.pmid, co_name'
+    )
     
   })  
   output$nodeslide <- renderUI({
+    message("1")
+    message(vals$dbcount)
+    message("2")    
     sliderInput("nodedeg", "Filter Nodes by Out-Degree", min=0, max=vals$dbcount, value=.1*vals$dbcount, round=TRUE)
   })
   
   output$network_proxy <- renderVisNetwork({
+    
     #cat(file=stderr(), query(), "\n")
     # Execute Query
     edges_df <- dbGetQuery(connection,query())
@@ -156,54 +133,36 @@ server <- function(input, output, session) {
     #edges_df[grepl( "Novartis", edges_df$source),]
     #edges_df[edges_df$source == "Novartis",]
     
+    
+
+    
     nodes_from <- as.data.frame(table(title =edges_df$source ))
     nodes_to <- as.data.frame(table(title =edges_df$target))
     
-    
-    #Check data - this's not working
-    #validate(
-    #    need( nrow (nodes_from)>0, "No data has returned")
-    #  ) 
-    if(nrow(nodes_from) == 0)
-    {
-      output$text_citation <- renderText({ 
-        HTML(paste("No data has returned" ))
-      })
-      return()
-    }else
-    {
-      output$text_citation <- renderText({ 
-        HTML(paste("PubMed citations matching search for <b>", input$pname, "</b>: ", vals$pmidcount, "; &nbsp;   &nbsp;  Citations with COI data: ",   vals$nfv ))
-      })
-      
-    }
-    
+    #Check data
+    validate(
+        need(length(nodes_from$title) > 0, "No data has returned")
+      )  
     
     vals$dbcount = max(nodes_from$Freq)
-    message(paste("dbcount: ", vals$dbcount) )
+    message("3")
+    message(vals$dbcount)
+    message("4")    
     
     #nodes_from <- as.data.frame(table(name=edges$from, nName=edges$co_name, Group=edges$coi_type ))
     #nodes_to <- as.data.frame(table(name=edges$to, nName=edges$author_name))
     #nodes_to["Group"]="Authors"
-    nodes_to$Freq = 1 # fix author&article's node size
-    
-    groupName=""
-    if(input$granularitylvl == "1" ){groupName="Authors"}
-    else{groupName="Article"}
-    
+    nodes_to$Freq = 1
     nodes_to <- nodes_to %>% 
-      mutate(group = groupName) %>% 
-      mutate(value = Freq)   %>% 
-      mutate(label = title)   
-    
-    #nfv match count in db
+      mutate(group = "Article") %>% 
+      mutate(value = Freq)   
     vals$nfv <- sum(nodes_to$Freq)
-    
+
     nodes_from <- nodes_from %>% 
       mutate(group = "Industry")  %>% 
-      mutate(value = Freq)    %>% 
-      mutate(label = title)   
-
+      mutate(value = Freq) 
+    
+    
     #filter nodes by out-degree
     nodes_from <- nodes_from[nodes_from$Freq > input$nodedeg,]
     
@@ -232,15 +191,15 @@ server <- function(input, output, session) {
     nodes <- nodes[(nodes$id %in% edges$to | nodes$id %in% edges$from), ]
     
 
+  
     output$topsponsors <- renderDataTable({
       topsponsors<-subset(nodes, select=c("title", "group", "Freq"))
       topsponsors
     })
     
-    message(groupName)
     visNetwork(nodes, edges, height = "400px", width = "100%") %>%
       #visLegend()  %>%
-      visGroups(groupname = groupName, color = "lightblue") %>%
+      visGroups(groupname = "Authors", color = "lightblue") %>%
       visGroups(groupname = "Industry" , color = "red") %>%
       addFontAwesome() %>%
       visPhysics(stabilization = FALSE) %>%
@@ -262,12 +221,12 @@ server <- function(input, output, session) {
   #Slider to fifer by Out-Degree
   
   #Text display with citations len(pmidlist)  vs len(unique(edges:df$pmid)) , input$var2
-  output$text_citation <- renderText({ 
+  output$text_citation <- renderUI({ 
     HTML(paste("PubMed citations matching search for <b>", input$pname, "</b>: ", vals$pmidcount, "; &nbsp;   &nbsp;  Citations with COI data: ",   vals$nfv ))
   })
   
-  
-  }
+    
+}
 
 
 shinyApp(ui = ui, server = server)
