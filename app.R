@@ -20,7 +20,7 @@ ui <- fluidPage( theme = shinytheme("sandstone"),
                  hr(),
                  fluidRow(
                    div(style="display: inline-block;vertical-align:top; width: 220px; margin-left: 10px;", 
-                       selectInput("granularitylvl", label = "Granularity Level:", choices = list("Article Level"=1, "Journal Level"=2))
+                       selectInput("granularitylvl", label = "Granularity Level:", choices = list("Article Level"=1, "Journal Level"=2, "Author Level"=3))
                    )
                    ,div(style="display: inline-block;vertical-align:top; width: 250px; margin-left: 10px;",uiOutput("idquery"))
                    ,div(style="display: inline-block;vertical-align:middle;width: 150px;  margin-top: 25px;",actionButton("go", "Plot Network"))
@@ -42,7 +42,7 @@ ui <- fluidPage( theme = shinytheme("sandstone"),
                                           font-weight: bold;
                                           font-size: 100%;
                                           color: #000000;
-                                          background-color: #CCFF66;
+                                          background-color: #335EFF;
                                           z-index: 105;
                                           }
                                           "))                        
@@ -69,7 +69,7 @@ ui <- fluidPage( theme = shinytheme("sandstone"),
 
 server <- function(input, output, session) {
   
-  #setwd("/Users/pedroseguel/RProjects/PharmModel")
+  #Set directory in case dataset does not run correctly: setwd("/Users/pedroseguel/RProjects/PharmModel")
   # connect to the sqlite file
   sqlite    <- dbDriver("SQLite")
   connection <- dbConnect(sqlite,"t2v_test.sqlite")
@@ -79,7 +79,6 @@ server <- function(input, output, session) {
   })
   
   observeEvent(input$go, {
-    message("go button was pressed")
     updateTextInput(session, 'pname', label="Name Search:", value = input$pname)
     
   })
@@ -88,7 +87,8 @@ server <- function(input, output, session) {
     temp <- esearch(input$pname,db="pubmed",retmode = "json", retstart = 0, retmax = "100000", datetype = "pdat",mindate = "2015",maxdate = "2018")
     #temp <- esearch(input$pname,db="pubmed",retmode = "json", retstart = 0, retmax = "100000")
   })
-  
+
+  countvals <- reactiveValues(coi= 0, nrow=0, ji= 0, au = 0)
   vals <- reactiveValues(pmidcount = 0) #set vals$pmidcount
   vals <- reactiveValues(nfv = 0)  #set vals$nfv
   vals <- reactiveValues(dbcount = 0)  #set vals$dbcount
@@ -102,7 +102,6 @@ server <- function(input, output, session) {
     pmidlist <- append(pmidlist,tempdata$esearchresult$idlist)
     
     vals$pmidcount = length(pmidlist)
-    message(length(pmidlist))
     #tempdata$esearchresult$idlist
     
     
@@ -118,29 +117,15 @@ server <- function(input, output, session) {
     query_pmid_list <- paste(pmidlist,collapse = "','") 
     query_pmid_list_where <- paste0("'",query_pmid_list,"'" )
     #cat(file=stderr(), query_pmid_list, "\n")
-    if(input$granularitylvl == "1" ){
-      query = paste('select aid 
-                    , author_name  as "target" 
-                    , co_name  as "source"
-                    , sum(weight) as value
-                    , industry_type
-                    from edges_master where pmid IN (',query_pmid_list_where,')'
-                    , 'group by edges_master.aid, co_name'    )
-    }
-    else{
-      query = paste('select edges_master.pmid as "target" 
-                    , co_name  as "source"
-                    , sum(weight) as value  
-                    , max(article_meta_data.title) as article_title
-                    from edges_master 
-                    join article_meta_data
-                    on edges_master.pmid = article_meta_data.pmid
-                    where edges_master.pmid IN (',query_pmid_list_where,')'
-                    , 'group by edges_master.pmid, co_name'    )
-      
-    }
     
-    
+    query = paste('select co_name  as "source"
+                  , author_name  as "target_author" 
+                  , edges_master.pmid as "target_article" 
+                  , jid as target_journal
+                  , weight
+                  from edges_master where pmid IN (',query_pmid_list_where,')'
+                  )
+
   })  
   output$nodeslide <- renderUI({
     sliderInput("nodedeg", "Filter Nodes by Out-Degree", min=0, max=vals$dbcount, value=.1*vals$dbcount, round=TRUE)
@@ -149,21 +134,24 @@ server <- function(input, output, session) {
   output$network_proxy <- renderVisNetwork({
     #cat(file=stderr(), query(), "\n")
     # Execute Query
-    edges_df <- dbGetQuery(connection,query())
+    edges_df_db <- dbGetQuery(connection,query())
+
+    countvals$nrow = nrow(edges_df_db)
+    countvals$coi = length(unique(edges_df_db$target_article))
+    countvals$ji = length(unique(edges_df_db$target_journal))
+    countvals$au = length(unique(edges_df_db$target_author))                               
     #aa= edges_df[edges_df$industry_type != 'pharmaceuticals', ]
     #summary(edges_df)
     #edges_df$to
     #edges_df[grepl( "Novartis", edges_df$source),]
     #edges_df[edges_df$source == "Novartis",]
     
-    nodes_from <- as.data.frame(table(title =edges_df$source ))
-    nodes_to <- as.data.frame(table(title =edges_df$target))
-    
-    
+
     #Check data - this's not working
     #validate(
     #    need( nrow (nodes_from)>0, "No data has returned")
     #  ) 
+    nodes_from <- as.data.frame(table(Title =edges_df_db$source ))
     if(nrow(nodes_from) == 0)
     {
       output$text_citation <- renderText({ 
@@ -172,12 +160,42 @@ server <- function(input, output, session) {
       return()
     }else
     {
+      #PubMed Citations Matching Search for _____: N; Citations with COI Data: N; Total Conflicts N; Journals Involved: N; Authors Involved: N
       output$text_citation <- renderText({ 
-        HTML(paste("PubMed citations matching search for <b>", input$pname, "</b>: ", vals$pmidcount, "; &nbsp;   &nbsp;  Citations with COI data: ",   vals$nfv ))
+        HTML(paste("PubMed Citations Matching Search for <b>", input$pname, "</b>: ", vals$pmidcount
+                   , "; &nbsp;Citations with COI Data: ",  countvals$coi 
+                   , "; &nbsp;Total Conflicts: ",   countvals$nrow
+                   , "; &nbsp;Journals Involved: ",   countvals$ji 
+                   , "; &nbsp;Authors Involved: ",   countvals$au                   
+                   )
+            )
       })
       
     }
+
+    edges_df <- edges_df_db
+    groupName=""
+    if(input$granularitylvl == "1" ){
+      groupName="Article"
+      edges_df <- edges_df %>% 
+        mutate(target = target_article) 
+    }
+    else if(input$granularitylvl == "2" ){
+      groupName="Journals"
+      edges_df <- edges_df %>% 
+        mutate(target = target_journal) 
+    }
+    else{
+      groupName="Authors"
+      edges_df <- edges_df %>% 
+        mutate(target = target_author) 
+    }
+    edges_df <- edges_df %>% 
+      group_by(source, target) %>% 
+      summarise(value = sum(as.numeric(weight), na.rm=TRUE))
     
+    #Note_to
+    nodes_to <- as.data.frame(table(Title =edges_df$target))
     
     vals$dbcount = max(nodes_from$Freq)
     message(paste("dbcount: ", vals$dbcount) )
@@ -187,14 +205,11 @@ server <- function(input, output, session) {
     #nodes_to["Group"]="Authors"
     nodes_to$Freq = 1 # fix author&article's node size
     
-    groupName=""
-    if(input$granularitylvl == "1" ){groupName="Authors"}
-    else{groupName="Article"}
-    
+
     nodes_to <- nodes_to %>% 
       mutate(group = groupName) %>% 
       mutate(value = Freq)   %>% 
-      mutate(label = title)   
+      mutate(label = Title)   
     
     #nfv match count in db
     vals$nfv <- sum(nodes_to$Freq)
@@ -202,7 +217,7 @@ server <- function(input, output, session) {
     nodes_from <- nodes_from %>% 
       mutate(group = "Industry")  %>% 
       mutate(value = Freq)    %>% 
-      mutate(label = title)   
+      mutate(label = Title)   
     
     #filter nodes by out-degree
     nodes_from <- nodes_from[nodes_from$Freq > input$nodedeg,]
@@ -214,6 +229,7 @@ server <- function(input, output, session) {
     #INCOMPLETE, frequency of out-degree as an input value
     #freq <- subset(freq, freq >= input$nodedeg)
     
+
     #nodes_df[grepl( "Novartis", nodes_df$title),]
     #query_pmid_list_where
     #idx create
@@ -223,27 +239,31 @@ server <- function(input, output, session) {
     
     #create from, to in edges
     edges <- edges_df %>% 
-      left_join(select(nodes, id, title) %>% rename(from = id), by=c('source' = 'title')) %>% 
-      left_join(select(nodes, id, title) %>% rename(to = id), by=c('target' = 'title'))
-    
+      left_join(select(nodes, id, Title) %>% rename(from = id), by=c('source' = 'Title')) %>% 
+      left_join(select(nodes, id, Title) %>% rename(to = id), by=c('target' = 'Title'))
+
+
     #fliter edges table by out-degree 
     #edges <- subset(edges,edges$to %in% nodes$id | edges$from %in% nodes$id)
     edges <- edges[edges$from %in% nodes$id, ]
     nodes <- nodes[(nodes$id %in% edges$to | nodes$id %in% edges$from), ]
-    
-    
+
+
+    #Table display
     output$topsponsors <- renderDataTable({
-      topsponsors<-subset(nodes, select=c("title", "group", "Freq"))
+      topsponsors<-subset(nodes, select=c("Title", "group", "Freq"))
       topsponsors
     })
+
     
-    message(groupName)
-    visNetwork(nodes, edges, height = "400px", width = "100%") %>%
-      #visLegend()  %>%
-      visGroups(groupname = groupName, color = "lightblue") %>%
-      visGroups(groupname = "Industry" , color = "red") %>%
+    #Interactive Network display, see the documentation here: https://datastorm-open.github.io/visNetwork/
+    visNetwork(nodes, edges, height = "400px", width = "100%") %>%  #Control size of the network display
+      visLegend(width = 0.1, position = "left", main = "")  %>%   #Display or mute Legend based on groups, using visLegend. Use options to add a title, adjust size or choose the position from the labels
+      visGroups(groupname = groupName, color = "lightblue") %>% #Customize name and color selection based on level selection
+      visGroups(groupname = "Industry" , color = "red") %>% #Customize name and color selection for on industry
       addFontAwesome() %>%
-      visPhysics(stabilization = FALSE) %>%
+      visPhysics(stabilization = FALSE) %>% #Using visPhysics() function, you can play with the physics of the network
+      #Use igraph layout: With visIgraphLayout(), you can use all available layouts in igraph 
       visIgraphLayout(layout = ifelse(input$layout == "1", "layout_nicely",ifelse(input$layout == "2", "layout_with_fr", ifelse(input$layout == "3", "layout_with_kk", ifelse(input$layout == "4", "layout_in_circle", "layout_with_lgl")))) )  %>%
       visEdges(smooth = FALSE) %>%
       visNodes(scaling = list(min = 20, max = 100), color = list(background = "lightblue"
@@ -251,9 +271,19 @@ server <- function(input, output, session) {
       )
       ,shadow = list(enabled = TRUE, size = 10)
       ) %>%
-      visOptions(highlightNearest = TRUE) %>% #Optional highligh option
+      #Custom options are available using visOptions(), such as Highlight nearest, Select by node id, Select by a column, for more info: https://datastorm-open.github.io/visNetwork/options.html
+      visOptions(highlightNearest = TRUE) %>% #Optional highligh option by node selection
+      #visOptions(selectedBy = "Title") %>% #Optional selection by column to allow search by title or author name on the graph
       #visOptions(selectedBy = "group") %>% #Optional selection by group in the graph
-      visInteraction(hover = TRUE)  %>%
+      
+      #Control the interactions (i.e. dragNodes, hover, zoom, keyboard functions) of the network with visInteraction():
+      visInteraction(dragNodes = TRUE, #nable or not the selection and movement of nodes (click on a node, and move your mouse)
+                     dragView = TRUE, #enable or not the movement of the full network (click everywhere except node, and move your mouse) 
+                     zoomView = TRUE, #enable or not the zoom (use mouse scroll)
+                     hover = TRUE, #hover and hoverConnectedEdges : control hover
+                     #hoverConnectedEdges = TRUE,
+                     #keyboard = TRUE, tooltipDelay = 0, # enable keyboard manipulation rather than mouse (click on network before)
+                     navigationButtons = TRUE)  %>% #display navigation Buttons on the graph display.
       visLayout(randomSeed = 123)   %>%
       visEdges ( arrows = 'to' )
     
@@ -261,10 +291,10 @@ server <- function(input, output, session) {
   #output$outval <- renderText({ query() })  
   #Slider to fifer by Out-Degree
   
-  #Text display with citations len(pmidlist)  vs len(unique(edges:df$pmid)) , input$var2
-  output$text_citation <- renderText({ 
-    HTML(paste("PubMed citations matching search for <b>", input$pname, "</b>: ", vals$pmidcount, "; &nbsp;   &nbsp;  Citations with COI data: ",   vals$nfv ))
-  })
+  #Text display with number of citations matching search from pmidlist, and citation using the data for the graph. 
+  #output$text_citation <- renderText({ 
+  #  HTML(paste("PubMed citations matching search for <b>", input$pname, "</b>: ", vals$pmidcount, "; &nbsp;   &nbsp;  Citations with COI data: ",   vals$nfv ))
+  #})
   
   
   }
